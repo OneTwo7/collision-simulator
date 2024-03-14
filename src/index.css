@@ -12,5 +12,5 @@ main {
 }
 
 canvas {
-  background-color: #00f;
+  border: 1px solid #ddd;
 }
