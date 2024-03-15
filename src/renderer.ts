@@ -82,8 +82,8 @@ function getTimeToHit(firstBall: Ball, secondBall: Ball) {
     return Infinity;
   }
 
-  const dvdv = dvx * dvx + dvy * dvy;
-  const drdr = dx * dx + dy * dy;
+  const dvdv = dvx ** 2 + dvy ** 2;
+  const drdr = dx ** 2 + dy ** 2;
   const sigma = 2 * BALL_RADIUS;
   const d = dvdr ** 2 - dvdv * (drdr - sigma ** 2);
 
@@ -112,10 +112,10 @@ function getTimeToHitWall(ball: Ball) {
 }
 
 function bounceOff(firstBall: Ball, secondBall: Ball) {
-  const dx = firstBall.x - secondBall.x;
-  const dy = firstBall.y - secondBall.y;
-  const dvx = firstBall.vx - secondBall.vx;
-  const dvy = firstBall.vy - secondBall.vy;
+  const dx = secondBall.x - firstBall.x;
+  const dy = secondBall.y - firstBall.y;
+  const dvx = secondBall.vx - firstBall.vx;
+  const dvy = secondBall.vy - firstBall.vy;
   const dvdr = dx * dvx + dy * dvy;
   const dist = 2 * BALL_RADIUS;
   const j = (2 * BALL_MASS ** 2 * dvdr) / (2 * BALL_MASS * dist);
@@ -152,10 +152,10 @@ function handleBallCollisions(ball: Ball) {
     firstBallCount: ball.count,
   });
 
-  /* for (const secondBall of balls) {
+  for (const secondBall of balls) {
     const timeToHit = getTimeToHit(ball, secondBall);
 
-    if (timeToHit !== Infinity) {
+    if (timeToHit > 0 && timeToHit !== Infinity) {
       insert(priorityQueue, {
         frame: timeToHit + frame,
         firstBall: ball,
@@ -164,7 +164,7 @@ function handleBallCollisions(ball: Ball) {
         secondBallCount: secondBall.count,
       });
     }
-  } */
+  }
 }
 
 for (const ball of balls) {
