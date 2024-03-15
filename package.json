@@ -2,7 +2,7 @@
   "name": "collision-simulator",
   "productName": "collision-simulator",
   "version": "1.0.0",
-  "description": "My Electron application description",
+  "description": "Heapsort based collision simulator",
   "main": ".vite/build/main.js",
   "scripts": {
     "start": "electron-forge start",
