@@ -27,16 +27,21 @@
  */
 
 import './index.css';
-import { Ball } from './types';
+import { delMin, insert } from './priority-queue';
+import { Ball, CollisionEvent } from './types';
 
 const CANVAS_WIDTH = 500;
 const CANVAS_HEIGHT = 500;
 const NUMBER_OF_BALLS = 50;
 const BALL_RADIUS = 5;
 const BALL_SPEED = 2.5;
+const BALL_MASS = 10;
 const canvas = document.querySelector('canvas');
 const ctx = canvas.getContext('2d');
 const balls: Ball[] = [];
+const priorityQueue: CollisionEvent[] = [null];
+
+let frame = 0;
 
 function getSign() {
   return Math.random() > 0.5 ? 1 : -1;
@@ -49,7 +54,9 @@ for (let i = 0; i < NUMBER_OF_BALLS; i++) {
   balls.push({
     x: Math.random() * (CANVAS_WIDTH - 10) + 5,
     y: Math.random() * (CANVAS_HEIGHT - 10) + 5,
-    dir: [xSpeed * getSign(), ySpeed * getSign()],
+    vx: xSpeed * getSign(),
+    vy: ySpeed * getSign(),
+    count: 0,
   });
 }
 
@@ -60,30 +67,140 @@ function drawBall(x: number, y: number, radius: number) {
   ctx.fill();
 }
 
-function handleBorderCollision(ball: Ball) {
-  const { x, y } = ball;
-
-  if (x + BALL_RADIUS >= CANVAS_WIDTH || x - BALL_RADIUS <= 0) {
-    ball.dir[0] *= -1;
+function getTimeToHit(firstBall: Ball, secondBall: Ball) {
+  if (firstBall === secondBall) {
+    return Infinity;
   }
 
-  if (y + BALL_RADIUS >= CANVAS_HEIGHT || y - BALL_RADIUS <= 0) {
-    ball.dir[1] *= -1;
+  const dx = firstBall.x - secondBall.x;
+  const dy = firstBall.y - secondBall.y;
+  const dvx = firstBall.vx - secondBall.vx;
+  const dvy = firstBall.vy - secondBall.vy;
+  const dvdr = dx * dvx + dy * dvy;
+
+  if (dvdr > 0) {
+    return Infinity;
   }
+
+  const dvdv = dvx * dvx + dvy * dvy;
+  const drdr = dx * dx + dy * dy;
+  const sigma = 2 * BALL_RADIUS;
+  const d = dvdr ** 2 - dvdv * (drdr - sigma ** 2);
+
+  if (d < 0) {
+    return Infinity;
+  }
+
+  return -(dvdr + Math.sqrt(d)) / dvdv;
 }
 
-function draw() {
-  const date = new Date();
+function getTimeToHitWall(ball: Ball) {
+  let timeToHitVerticalWall = Infinity;
+  let timeToHitHorizontalWall = Infinity;
 
+  if (ball.vx) {
+    timeToHitVerticalWall =
+      ball.vx > 0 ? (CANVAS_WIDTH - BALL_RADIUS - ball.x) / ball.vx : (ball.x - BALL_RADIUS) / -ball.vx;
+  }
+
+  if (ball.vy) {
+    timeToHitHorizontalWall =
+      ball.vy > 0 ? (CANVAS_HEIGHT - BALL_RADIUS - ball.y) / ball.vy : (ball.y - BALL_RADIUS) / -ball.vy;
+  }
+
+  return Math.min(timeToHitVerticalWall, timeToHitHorizontalWall);
+}
+
+function bounceOff(firstBall: Ball, secondBall: Ball) {
+  const dx = firstBall.x - secondBall.x;
+  const dy = firstBall.y - secondBall.y;
+  const dvx = firstBall.vx - secondBall.vx;
+  const dvy = firstBall.vy - secondBall.vy;
+  const dvdr = dx * dvx + dy * dvy;
+  const dist = 2 * BALL_RADIUS;
+  const j = (2 * BALL_MASS ** 2 * dvdr) / (2 * BALL_MASS * dist);
+  const jx = (j * dx) / dist;
+  const jy = (j * dy) / dist;
+  firstBall.vx += jx / BALL_MASS;
+  firstBall.vy += jy / BALL_MASS;
+  secondBall.vx -= jx / BALL_MASS;
+  secondBall.vy -= jy / BALL_MASS;
+  firstBall.count++;
+  secondBall.count++;
+}
+
+function bounceOffWall(ball: Ball) {
+  const { x, y, vx, vy } = ball;
+
+  if ((x + BALL_RADIUS >= CANVAS_WIDTH && vx > 0) || (x - BALL_RADIUS <= 0 && vx < 0)) {
+    ball.vx *= -1;
+  }
+
+  if ((y + BALL_RADIUS >= CANVAS_HEIGHT && vy > 0) || (y - BALL_RADIUS <= 0 && vy < 0)) {
+    ball.vy *= -1;
+  }
+
+  ball.count++;
+}
+
+function handleBallCollisions(ball: Ball) {
+  const timeToHitWall = getTimeToHitWall(ball);
+
+  insert(priorityQueue, {
+    frame: timeToHitWall + frame,
+    firstBall: ball,
+    firstBallCount: ball.count,
+  });
+
+  /* for (const secondBall of balls) {
+    const timeToHit = getTimeToHit(ball, secondBall);
+
+    if (timeToHit !== Infinity) {
+      insert(priorityQueue, {
+        frame: timeToHit + frame,
+        firstBall: ball,
+        firstBallCount: ball.count,
+        secondBall,
+        secondBallCount: secondBall.count,
+      });
+    }
+  } */
+}
+
+for (const ball of balls) {
+  handleBallCollisions(ball);
+}
+
+let nextCollision = delMin(priorityQueue);
+
+function draw() {
   ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
+  while (nextCollision?.frame < frame) {
+    const { firstBall, firstBallCount, secondBall, secondBallCount } = nextCollision;
+
+    if (firstBallCount === firstBall.count && (!secondBall || secondBallCount === secondBall.count)) {
+      if (secondBall) {
+        bounceOff(firstBall, secondBall);
+        handleBallCollisions(firstBall);
+        handleBallCollisions(secondBall);
+      } else {
+        bounceOffWall(firstBall);
+        handleBallCollisions(firstBall);
+      }
+    }
+
+    nextCollision = delMin(priorityQueue);
+  }
+
   for (const ball of balls) {
-    ball.x += ball.dir[0];
-    ball.y += ball.dir[1];
+    ball.x += ball.vx;
+    ball.y += ball.vy;
 
     drawBall(ball.x, ball.y, BALL_RADIUS);
-    handleBorderCollision(ball);
   }
+
+  frame++;
 
   window.requestAnimationFrame(draw);
 }
